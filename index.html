@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>今天吃什么</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #FFF5E6, #FFE0EC);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            color: #333;
+        }
+        h1 {
+            font-size: 1.6rem;
+            margin: 20px 0 10px;
+            color: #FF6B6B;
+        }
+        .filter-section {
+            width: 90%;
+            max-width: 400px;
+            margin-bottom: 16px;
+        }
+        .filter-group { margin-bottom: 10px; }
+        .filter-group-title {
+            font-size: 0.8rem;
+            color: #999;
+            margin-bottom: 6px;
+        }
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .filter-tag {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1.5px solid #FFB5B5;
+            background: white;
+            color: #FF6B6B;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .filter-tag.active {
+            background: #FF6B6B;
+            color: white;
+            border-color: #FF6B6B;
+        }
+        .wheel-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 10px 0 20px;
+        }
+        .wheel-pointer {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-top: 20px solid #FF6B6B;
+            z-index: 10;
+            filter: drop-shadow(0 2px 4px rgba(255,107,107,0.4));
+        }
+        #wheelCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
+        }
+        .wheel-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 3px 10px rgba(255, 107, 107, 0.4);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.1s;
+        }
+        .wheel-center:active {
+            transform: translate(-50%, -50%) scale(0.93);
+        }
+        .result-card {
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.4s;
+            margin-bottom: 30px;
+            pointer-events: none;
+        }
+        .result-card.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .result-name {
+            font-size: 1.5rem;
+            color: #FF6B6B;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .result-desc {
+            font-size: 0.9rem;
+            color: #999;
+        }
+        .result-tags {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+        .result-tag {
+            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: #FFF0F0;
+            color: #FF8E8E;
+        }
+    </style>
+</head>
+<body>
+    <h1>今天吃什么</h1>
+
+    <div class="filter-section" id="filterSection"></div>
+
+    <div class="wheel-container">
+        <div class="wheel-pointer"></div>
+        <canvas id="wheelCanvas" width="600" height="600"></canvas>
+        <div class="wheel-center" id="spinBtn">吃什么</div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+        <div class="result-name" id="resultName"></div>
+        <div class="result-desc" id="resultDesc"></div>
+        <div class="result-tags" id="resultTags"></div>
+    </div>
+
+    <script>
+    // === Food Database ===
+    const ALL_FOODS = [
+        // 主食 - 咸香
+        { name: "黄焖鸡米饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "酱香浓郁，米饭杀手" },
+        { name: "牛肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "大块牛肉，吃得满足" },
+        { name: "咖喱鸡肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "浓郁咖喱，异域风味" },
+        { name: "鸡排饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "外酥里嫩，经典美味" },
+        { name: "卤肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "卤汁浸润，一碗满足" },
+        { name: "牛肉炒饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "粒粒分明，镬气十足" },
+        { name: "煲仔饭", taste: "咸香", type: "主食", scenario: "好好吃一顿", desc: "锅巴焦香，一煲搞定" },
+        { name: "鸡公煲", taste: "咸香", type: "主食", scenario: "好好吃一顿", desc: "鸡肉软烂，酱汁拌饭绝了" },
+        // 主食 - 辣/麻辣
+        { name: "麻辣香锅", taste: "麻辣", type: "主食", scenario: "好好吃一顿", desc: "自选食材，麻辣过瘾" },
+        { name: "干锅鸡", taste: "辣", type: "主食", scenario: "好好吃一顿", desc: "干香入味，越吃越上头" },
+        { name: "辣子鸡饭", taste: "辣", type: "主食", scenario: "快速解决", desc: "香辣酥脆，米饭绝配" },
+        { name: "泡椒牛肉饭", taste: "辣", type: "主食", scenario: "快速解决", desc: "酸辣开胃，下饭神器" },
+        // 汤粉面
+        { name: "牛肉面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "热腾腾的牛肉面，暖胃又满足" },
+        { name: "酸辣粉", taste: "酸甜", type: "汤粉面", scenario: "快速解决", desc: "酸辣开胃，嗦粉快乐" },
+        { name: "螺蛳粉", taste: "辣", type: "汤粉面", scenario: "好好吃一顿", desc: "闻着臭吃着香，上头" },
+        { name: "冒菜", taste: "麻辣", type: "汤粉面", scenario: "好好吃一顿", desc: "一个人的火锅，丰俭由人" },
+        { name: "麻辣烫", taste: "麻辣", type: "汤粉面", scenario: "好好吃一顿", desc: "想吃什么涮什么" },
+        { name: "重庆小面", taste: "麻辣", type: "汤粉面", scenario: "快速解决", desc: "麻辣鲜香，一碗过瘾" },
+        { name: "刀削面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "面条劲道，汤浓味美" },
+        { name: "砂锅米线", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "砂锅慢煮，米线滑嫩" },
+        { name: "拌面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "拌匀一口，简单美味" },
+        { name: "鸡汤馄饨", taste: "清淡", type: "汤粉面", scenario: "快速解决", desc: "皮薄馅大，汤鲜味美" },
+        { name: "粥", taste: "清淡", type: "汤粉面", scenario: "快速解决", desc: "暖心暖胃，清淡舒服" },
+        // 小吃
+        { name: "麻辣拌", taste: "麻辣", type: "小吃", scenario: "好好吃一顿", desc: "拌一拌就很好吃" },
+        { name: "鸡蛋灌饼", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "外酥里软，简单幸福" },
+        { name: "手抓饼", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "层层酥脆，百吃不厌" },
+        { name: "煎饼果子", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "脆饼加蛋，经典早餐也能当宵夜" },
+        { name: "凉皮", taste: "酸甜", type: "小吃", scenario: "快速解决", desc: "爽滑Q弹，夏天最爱" },
+        { name: "鸡蛋仔", taste: "酸甜", type: "小吃", scenario: "下午茶", desc: "外脆内软，奶香浓郁" },
+        { name: "肠粉", taste: "清淡", type: "小吃", scenario: "快速解决", desc: "薄如蝉翼，滑嫩鲜美" },
+        // 烧烤
+        { name: "烤串", taste: "咸香", type: "烧烤", scenario: "夜宵", desc: "炭火烤串，夜宵之王" },
+        { name: "烤鸡翅", taste: "咸香", type: "烧烤", scenario: "夜宵", desc: "外焦里嫩，一口一个" },
+        { name: "烤牛肉串", taste: "辣", type: "烧烤", scenario: "夜宵", desc: "大块牛肉，孜然飘香" },
+        { name: "烤冷面", taste: "酸甜", type: "烧烤", scenario: "夜宵", desc: "酸甜Q弹，路边摊的快乐" },
+        // 炸物
+        { name: "炸鸡", taste: "咸香", type: "炸物", scenario: "夜宵", desc: "外酥里嫩，快乐肥宅餐" },
+        { name: "鸡米花", taste: "咸香", type: "炸物", scenario: "下午茶", desc: "一口一个，停不下来" },
+        { name: "炸鸡排", taste: "咸香", type: "炸物", scenario: "快速解决", desc: "大鸡排配奶茶，完美组合" },
+        { name: "薯条", taste: "咸香", type: "炸物", scenario: "下午茶", desc: "蘸番茄酱，经典永不过时" },
+        { name: "炸年糕", taste: "酸甜", type: "炸物", scenario: "下午茶", desc: "外脆里糯，甜辣都好吃" },
+        // 甜品饮品
+        { name: "奶茶+小食", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "续命奶茶，搭配小食更快乐" },
+        { name: "蛋糕", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "甜甜的，治愈一切" },
+        { name: "冰淇淋", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "冰冰凉凉，夏日必备" },
+        { name: "杨枝甘露", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "芒果椰奶，甜蜜清爽" },
+        // 清淡
+        { name: "白切鸡饭", taste: "清淡", type: "主食", scenario: "快速解决", desc: "原汁原味，鸡肉嫩滑" },
+    ];
+
+    // === Filter Config ===
+    const FILTER_CONFIG = {
+        taste: { label: "口味", options: ["辣", "清淡", "咸香", "酸甜", "麻辣"] },
+        type: { label: "类型", options: ["主食", "小吃", "汤粉面", "烧烤", "炸物", "甜品饮品"] },
+        scenario: { label: "场景", options: ["快速解决", "好好吃一顿", "夜宵", "下午茶"] },
+    };
+
+    const activeFilters = { taste: new Set(), type: new Set(), scenario: new Set() };
+
+    function getFilteredFoods() {
+        return ALL_FOODS.filter(food => {
+            for (const key of Object.keys(activeFilters)) {
+                if (activeFilters[key].size > 0 && !activeFilters[key].has(food[key])) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }
+
+    // === Render Filters ===
+    function renderFilters() {
+        const section = document.getElementById("filterSection");
+        section.innerHTML = "";
+        for (const [key, config] of Object.entries(FILTER_CONFIG)) {
+            const group = document.createElement("div");
+            group.className = "filter-group";
+            group.innerHTML = '<div class="filter-group-title">' + config.label + '</div>';
+            const tagsDiv = document.createElement("div");
+            tagsDiv.className = "filter-tags";
+            for (const option of config.options) {
+                const tag = document.createElement("span");
+                tag.className = "filter-tag" + (activeFilters[key].has(option) ? " active" : "");
+                tag.textContent = option;
+                tag.addEventListener("click", () => {
+                    if (activeFilters[key].has(option)) {
+                        activeFilters[key].delete(option);
+                    } else {
+                        activeFilters[key].add(option);
+                    }
+                    renderFilters();
+                    renderWheel();
+                });
+                tagsDiv.appendChild(tag);
+            }
+            group.appendChild(tagsDiv);
+            section.appendChild(group);
+        }
+    }
+
+    // === Wheel ===
+    const WHEEL_COLORS = [
+        "#FF6B6B", "#FFA07A", "#FFD700", "#FF8CA1",
+        "#FFB347", "#FF7F7F", "#FFC3A0", "#FF9A9E",
+    ];
+
+    let currentFoods = [];
+    let currentRotation = 0;
+    let isSpinning = false;
+
+    function shuffleArray(arr) {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
+    function renderWheel() {
+        const canvas = document.getElementById("wheelCanvas");
+        const ctx = canvas.getContext("2d");
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const r = cx - 4;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const filtered = getFilteredFoods();
+
+        if (filtered.length === 0) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.fillStyle = "#FFE0EC";
+            ctx.fill();
+            ctx.fillStyle = "#FF6B6B";
+            ctx.font = "bold 28px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("没有匹配的美食", cx, cy - 10);
+            ctx.font = "24px sans-serif";
+            ctx.fillText("试试减少筛选条件~", cx, cy + 25);
+            currentFoods = [];
+            return;
+        }
+
+        const count = Math.max(3, Math.min(8, filtered.length));
+        currentFoods = shuffleArray(filtered).slice(0, count);
+
+        const sliceAngle = (2 * Math.PI) / currentFoods.length;
+
+        currentFoods.forEach((food, i) => {
+            const startAngle = i * sliceAngle;
+            const endAngle = startAngle + sliceAngle;
+
+            // Draw slice
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, r, startAngle, endAngle);
+            ctx.closePath();
+            ctx.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length];
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.6)";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw text
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(startAngle + sliceAngle / 2);
+            ctx.textAlign = "center";
+            ctx.fillStyle = "white";
+            ctx.font = "bold 24px sans-serif";
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 3;
+            ctx.fillText(food.name, r * 0.6, 7);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        });
+
+        // Outer ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(255,255,255,0.8)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+
+    // === Spin Logic ===
+    function spin() {
+        if (isSpinning || currentFoods.length === 0) return;
+        isSpinning = true;
+
+        document.getElementById("resultCard").classList.remove("show");
+
+        const extraSpins = 5 + Math.floor(Math.random() * 3);
+        const randomAngle = Math.random() * 360;
+        const totalRotation = currentRotation + extraSpins * 360 + randomAngle;
+
+        const canvas = document.getElementById("wheelCanvas");
+        canvas.style.transition = "transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)";
+        canvas.style.transform = "rotate(" + totalRotation + "deg)";
+        currentRotation = totalRotation;
+
+        if (navigator.vibrate) navigator.vibrate(50);
+
+        setTimeout(() => {
+            isSpinning = false;
+
+            // Pointer is at top center (12 o'clock = -90deg = 270deg)
+            // Canvas 0deg starts at 3 o'clock (right), so top is -90deg
+            const normalizedAngle = ((360 - (totalRotation % 360)) + 270) % 360;
+            const sliceDeg = 360 / currentFoods.length;
+            const index = Math.floor(normalizedAngle / sliceDeg) % currentFoods.length;
+            const selected = currentFoods[index];
+
+            showResult(selected);
+
+            // Reset wheel for next spin
+            setTimeout(() => {
+                canvas.style.transition = "none";
+                currentRotation = currentRotation % 360;
+                canvas.style.transform = "rotate(" + currentRotation + "deg)";
+                renderWheel();
+            }, 500);
+        }, 3100);
+    }
+
+    function showResult(food) {
+        document.getElementById("resultName").textContent = food.name;
+        document.getElementById("resultDesc").textContent = food.desc;
+        document.getElementById("resultTags").innerHTML =
+            '<span class="result-tag">' + food.taste + '</span>' +
+            '<span class="result-tag">' + food.type + '</span>' +
+            '<span class="result-tag">' + food.scenario + '</span>';
+        document.getElementById("resultCard").classList.add("show");
+        if (navigator.vibrate) navigator.vibrate([50, 30, 100]);
+    }
+
+    // === Event Binding ===
+    document.getElementById("spinBtn").addEventListener("click", spin);
+
+    // === Init ===
+    renderFilters();
+    renderWheel();
+    </script>
+</body>
+</html>
