@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>帮我选菜单~</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #FFF5E6, #FFE0EC);
+            min-height: 100vh;
+            padding: 20px 16px 100px;
+            color: #333;
+        }
+        h1 { font-size: 1.4rem; color: #FF6B6B; text-align: center; margin-bottom: 6px; }
+        .subtitle { font-size: 0.85rem; color: #999; text-align: center; margin-bottom: 20px; }
+        .category {
+            background: white;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .category-title {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #FF6B6B;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #FFE0E0;
+        }
+        .food-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .food-item:last-child { border-bottom: none; }
+        .food-check {
+            width: 22px;
+            height: 22px;
+            margin-right: 12px;
+            accent-color: #FF6B6B;
+            flex-shrink: 0;
+        }
+        .food-info { flex: 1; }
+        .food-name { font-size: 0.95rem; font-weight: 500; }
+        .food-meta { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+        .food-desc { font-size: 0.8rem; color: #999; margin-top: 2px; }
+        .stats {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 12px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+        .stats-text { font-size: 0.9rem; color: #666; }
+        .stats-text span { color: #FF6B6B; font-weight: bold; }
+        .btn-copy {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+            color: white;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-copy:active { opacity: 0.8; }
+        .add-section {
+            background: white;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .add-title {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #FF6B6B;
+            margin-bottom: 10px;
+        }
+        .add-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #FFD0D0;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            outline: none;
+            margin-bottom: 8px;
+        }
+        .add-input:focus { border-color: #FF6B6B; }
+        .add-input::placeholder { color: #ccc; }
+        .add-btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 16px;
+            background: #FFF0F0;
+            color: #FF6B6B;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .added-list {
+            margin-top: 10px;
+        }
+        .added-item {
+            display: inline-block;
+            padding: 4px 12px;
+            margin: 4px;
+            background: #FFF0F0;
+            color: #FF6B6B;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+        .added-item .remove {
+            margin-left: 6px;
+            cursor: pointer;
+            color: #FFB5B5;
+        }
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            z-index: 200;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>帮我选选菜单吧~</h1>
+    <p class="subtitle">勾选你想保留的，去掉不喜欢的，还可以添加新的哦</p>
+
+    <div id="foodList"></div>
+
+    <div class="add-section">
+        <div class="add-title">想加点别的？</div>
+        <input class="add-input" id="addInput" type="text" placeholder="输入你想加的美食名字...">
+        <button class="add-btn" id="addBtn">+ 添加</button>
+        <div class="added-list" id="addedList"></div>
+    </div>
+
+    <div class="stats">
+        <div class="stats-text">已选 <span id="selectedCount">0</span> / <span id="totalCount">0</span></div>
+        <button class="btn-copy" id="copyBtn">复制结果发给他</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    const ALL_FOODS = [
+        { name: "黄焖鸡米饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "酱香浓郁，米饭杀手" },
+        { name: "牛肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "大块牛肉，吃得满足" },
+        { name: "咖喱鸡肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "浓郁咖喱，异域风味" },
+        { name: "鸡排饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "外酥里嫩，经典美味" },
+        { name: "卤肉饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "卤汁浸润，一碗满足" },
+        { name: "牛肉炒饭", taste: "咸香", type: "主食", scenario: "快速解决", desc: "粒粒分明，镬气十足" },
+        { name: "煲仔饭", taste: "咸香", type: "主食", scenario: "好好吃一顿", desc: "锅巴焦香，一煲搞定" },
+        { name: "鸡公煲", taste: "咸香", type: "主食", scenario: "好好吃一顿", desc: "鸡肉软烂，酱汁拌饭绝了" },
+        { name: "麻辣香锅", taste: "麻辣", type: "主食", scenario: "好好吃一顿", desc: "自选食材，麻辣过瘾" },
+        { name: "干锅鸡", taste: "辣", type: "主食", scenario: "好好吃一顿", desc: "干香入味，越吃越上头" },
+        { name: "辣子鸡饭", taste: "辣", type: "主食", scenario: "快速解决", desc: "香辣酥脆，米饭绝配" },
+        { name: "泡椒牛肉饭", taste: "辣", type: "主食", scenario: "快速解决", desc: "酸辣开胃，下饭神器" },
+        { name: "白切鸡饭", taste: "清淡", type: "主食", scenario: "快速解决", desc: "原汁原味，鸡肉嫩滑" },
+        { name: "牛肉面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "热腾腾的牛肉面，暖胃又满足" },
+        { name: "酸辣粉", taste: "酸甜", type: "汤粉面", scenario: "快速解决", desc: "酸辣开胃，嗦粉快乐" },
+        { name: "螺蛳粉", taste: "辣", type: "汤粉面", scenario: "好好吃一顿", desc: "闻着臭吃着香，上头" },
+        { name: "冒菜", taste: "麻辣", type: "汤粉面", scenario: "好好吃一顿", desc: "一个人的火锅，丰俭由人" },
+        { name: "麻辣烫", taste: "麻辣", type: "汤粉面", scenario: "好好吃一顿", desc: "想吃什么涮什么" },
+        { name: "重庆小面", taste: "麻辣", type: "汤粉面", scenario: "快速解决", desc: "麻辣鲜香，一碗过瘾" },
+        { name: "刀削面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "面条劲道，汤浓味美" },
+        { name: "砂锅米线", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "砂锅慢煮，米线滑嫩" },
+        { name: "拌面", taste: "咸香", type: "汤粉面", scenario: "快速解决", desc: "拌匀一口，简单美味" },
+        { name: "鸡汤馄饨", taste: "清淡", type: "汤粉面", scenario: "快速解决", desc: "皮薄馅大，汤鲜味美" },
+        { name: "粥", taste: "清淡", type: "汤粉面", scenario: "快速解决", desc: "暖心暖胃，清淡舒服" },
+        { name: "麻辣拌", taste: "麻辣", type: "小吃", scenario: "好好吃一顿", desc: "拌一拌就很好吃" },
+        { name: "鸡蛋灌饼", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "外酥里软，简单幸福" },
+        { name: "手抓饼", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "层层酥脆，百吃不厌" },
+        { name: "煎饼果子", taste: "咸香", type: "小吃", scenario: "快速解决", desc: "脆饼加蛋，经典早餐也能当宵夜" },
+        { name: "凉皮", taste: "酸甜", type: "小吃", scenario: "快速解决", desc: "爽滑Q弹，夏天最爱" },
+        { name: "鸡蛋仔", taste: "酸甜", type: "小吃", scenario: "下午茶", desc: "外脆内软，奶香浓郁" },
+        { name: "肠粉", taste: "清淡", type: "小吃", scenario: "快速解决", desc: "薄如蝉翼，滑嫩鲜美" },
+        { name: "烤串", taste: "咸香", type: "烧烤", scenario: "夜宵", desc: "炭火烤串，夜宵之王" },
+        { name: "烤鸡翅", taste: "咸香", type: "烧烤", scenario: "夜宵", desc: "外焦里嫩，一口一个" },
+        { name: "烤牛肉串", taste: "辣", type: "烧烤", scenario: "夜宵", desc: "大块牛肉，孜然飘香" },
+        { name: "烤冷面", taste: "酸甜", type: "烧烤", scenario: "夜宵", desc: "酸甜Q弹，路边摊的快乐" },
+        { name: "炸鸡", taste: "咸香", type: "炸物", scenario: "夜宵", desc: "外酥里嫩，快乐肥宅餐" },
+        { name: "鸡米花", taste: "咸香", type: "炸物", scenario: "下午茶", desc: "一口一个，停不下来" },
+        { name: "炸鸡排", taste: "咸香", type: "炸物", scenario: "快速解决", desc: "大鸡排配奶茶，完美组合" },
+        { name: "薯条", taste: "咸香", type: "炸物", scenario: "下午茶", desc: "蘸番茄酱，经典永不过时" },
+        { name: "炸年糕", taste: "酸甜", type: "炸物", scenario: "下午茶", desc: "外脆里糯，甜辣都好吃" },
+        { name: "奶茶+小食", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "续命奶茶，搭配小食更快乐" },
+        { name: "蛋糕", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "甜甜的，治愈一切" },
+        { name: "冰淇淋", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "冰冰凉凉，夏日必备" },
+        { name: "杨枝甘露", taste: "酸甜", type: "甜品饮品", scenario: "下午茶", desc: "芒果椰奶，甜蜜清爽" },
+    ];
+
+    // Group by type
+    const typeOrder = ["主食", "汤粉面", "小吃", "烧烤", "炸物", "甜品饮品"];
+    const grouped = {};
+    typeOrder.forEach(t => grouped[t] = []);
+    ALL_FOODS.forEach(f => {
+        if (grouped[f.type]) grouped[f.type].push(f);
+    });
+
+    const checkedState = {};
+    ALL_FOODS.forEach(f => checkedState[f.name] = true);
+
+    const addedFoods = [];
+
+    function render() {
+        const container = document.getElementById("foodList");
+        container.innerHTML = "";
+
+        typeOrder.forEach(type => {
+            const foods = grouped[type];
+            if (foods.length === 0) return;
+
+            const cat = document.createElement("div");
+            cat.className = "category";
+
+            let html = '<div class="category-title">' + type + '（' + foods.length + '个）</div>';
+            foods.forEach(f => {
+                html += '<div class="food-item">' +
+                    '<input type="checkbox" class="food-check" data-name="' + f.name + '"' + (checkedState[f.name] ? ' checked' : '') + '>' +
+                    '<div class="food-info">' +
+                        '<div class="food-name">' + f.name + '</div>' +
+                        '<div class="food-meta">' + f.taste + ' · ' + f.scenario + '</div>' +
+                        '<div class="food-desc">' + f.desc + '</div>' +
+                    '</div></div>';
+            });
+
+            cat.innerHTML = html;
+            container.appendChild(cat);
+        });
+
+        // Bind checkbox events
+        document.querySelectorAll(".food-check").forEach(cb => {
+            cb.addEventListener("change", function() {
+                checkedState[this.dataset.name] = this.checked;
+                updateCount();
+            });
+        });
+
+        updateCount();
+    }
+
+    function updateCount() {
+        const selected = Object.values(checkedState).filter(v => v).length + addedFoods.length;
+        const total = ALL_FOODS.length + addedFoods.length;
+        document.getElementById("selectedCount").textContent = selected;
+        document.getElementById("totalCount").textContent = total;
+    }
+
+    function renderAdded() {
+        const list = document.getElementById("addedList");
+        list.innerHTML = "";
+        addedFoods.forEach((name, i) => {
+            const item = document.createElement("span");
+            item.className = "added-item";
+            item.innerHTML = name + ' <span class="remove" data-index="' + i + '">×</span>';
+            list.appendChild(item);
+        });
+        list.querySelectorAll(".remove").forEach(btn => {
+            btn.addEventListener("click", function() {
+                addedFoods.splice(parseInt(this.dataset.index), 1);
+                renderAdded();
+                updateCount();
+            });
+        });
+        updateCount();
+    }
+
+    document.getElementById("addBtn").addEventListener("click", function() {
+        const input = document.getElementById("addInput");
+        const name = input.value.trim();
+        if (name && !addedFoods.includes(name)) {
+            addedFoods.push(name);
+            input.value = "";
+            renderAdded();
+        }
+    });
+
+    document.getElementById("addInput").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") document.getElementById("addBtn").click();
+    });
+
+    function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.style.display = "block";
+        setTimeout(() => t.style.display = "none", 1800);
+    }
+
+    document.getElementById("copyBtn").addEventListener("click", function() {
+        const kept = ALL_FOODS.filter(f => checkedState[f.name]).map(f => f.name);
+        const removed = ALL_FOODS.filter(f => !checkedState[f.name]).map(f => f.name);
+
+        let text = "【保留的美食】（" + kept.length + "个）\n" + kept.join("、") + "\n\n";
+        if (removed.length > 0) {
+            text += "【去掉的】（" + removed.length + "个）\n" + removed.join("、") + "\n\n";
+        }
+        if (addedFoods.length > 0) {
+            text += "【新增想吃的】（" + addedFoods.length + "个）\n" + addedFoods.join("、") + "\n";
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("已复制，发给他吧~");
+            }).catch(() => {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    });
+
+    function fallbackCopy(text) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand("copy");
+            showToast("已复制，发给他吧~");
+        } catch (e) {
+            showToast("复制失败，请长按手动复制");
+        }
+        document.body.removeChild(ta);
+    }
+
+    render();
+    </script>
+</body>
+</html>
